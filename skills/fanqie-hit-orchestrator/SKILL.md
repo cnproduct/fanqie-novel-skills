@@ -2,11 +2,10 @@
 name: fanqie-hit-orchestrator
 description: >-
   番茄小说爆款总控引擎（欲望满足向）。以"欲望靶点 × 压抑-兑现周期 × 章尾钩"为核心，
-  按 P0-P8 状态机推进：扫榜雷达与榜单监控 → 欲望靶点选题 → 爆款拆解与换皮微创新 → 设定与伏笔账本 →
-  黄金三章 → 逐章连载 → 去AI味与过签审计 → 数据复盘。各阶段按需调用本地子技能
-  （short-drama、screenwriter-skill、screenwriting-skills、zenstory-drama-skills、drama-trend-rewriter）。
-  当用户要写番茄爽文/爆款网文、扫榜选题、监控榜单变化、拆解爆款、设计金手指与黄金三章、续写章节、
-  去AI味或做签约前审核时使用。若用户要的是成长/治愈/精神价值向作品，转交 fanqie-growth-orchestrator。
+  按 P0-P9 状态机全流程闭环推进：扫榜雷达与监控 → 欲望靶点选题 → 爆款拆解微创新 → 设定与伏笔账本 →
+  黄金三章 → 逐章连载 → 多维审校与去AI味精修（fanqie-audit-refiner） → 自动发布与审核核验（fanqie-auto-publisher） → 数据复盘。
+  当用户要写番茄爽文/爆款网文、扫榜选题、续写章节、去AI味精修或全自动发布至番茄后台时使用。
+  若用户要的是成长/治愈/精神价值向作品，转交 fanqie-growth-orchestrator。
 ---
 
 # 番茄小说爆款总控引擎（Fanqie Hit Orchestrator）
@@ -44,7 +43,7 @@ novels/<书名>/
 
 ---
 
-## 三、阶段状态机（P0-P8）
+## 三、阶段状态机（P0-P9 全流程闭环）
 
 | 阶段 | 触发 | 核心动作 | 调度 | 产出 | 闸口（不过不进下一阶段） |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -55,10 +54,11 @@ novels/<书名>/
 | **P4 设定账本** | `/bible` | 世界观、人物、金手指四要素、反派梯队、前 30 章章纲 | [04-cheat-and-progression.md](references/04-cheat-and-progression.md)、`../short-drama/references/villain-design.md`、`sw-character-conflict`、`sw-series-engine-bible` | `bible.md`（[模板](templates/book-bible.md)）、章纲（[模板](templates/chapter-outline.md)） | 金手指**有代价、有上限、有成长曲线** |
 | **P5 黄金三章** | `/open` | 写第 1-3 章 | [02-golden-three-chapters.md](references/02-golden-three-chapters.md)、`../short-drama/references/opening-rules.md`、`hook-design.md` | 第 001-003 章 | 通过三章自检表 + `text_lint.ps1` |
 | **P6 逐章连载** | `/write [N]` "继续写" | 按章纲写单章 → 更新 state.md | [03-chapter-engine.md](references/03-chapter-engine.md)、`../short-drama/references/satisfaction-matrix.md`、`rhythm-curve.md` | 第 N 章 | 一爽一钩、字数达标 |
-| **P7 润色审计** | `/audit` 或每 10 章自动 | 文本体检 → 去 AI 味 → 主编铁律 → 合规 | `scripts/text_lint.ps1`、`zenstory .../anti-template-repair.md`、`../script-super-orchestrator/references/04-iron-rules-and-anti-ai.md`、`../screenwriter-skill/references/iron_rules.md`、[05-fanqie-compliance.md](references/05-fanqie-compliance.md) | `04-audit/审计报告.md`（[模板](templates/audit-report.md)） | 综合评级 ≥ A，无合规红灯 |
-| **P8 数据复盘**（可选） | `/review-data` | 用户提供作者后台数据（读完率、追读、加书架、评论） → 定位掉点章节 → 调整后续章纲 | [06-trend-radar.md](references/06-trend-radar.md) 第四节 | 复盘结论 + 章纲修订 | — |
+| **P7 审校精修** | `/refine` 或创作后自动 | 多维审校：清零破折号/翻案腔/黑话/套话/说教/超长句/平台风控 | `fanqie-audit-refiner`（`audit_check.py` + `auto_refine.py`） | `04-audit/audit-report.md`、`05-fanqie-upload/` | **评分 clean(0) ｜ 硬禁 0 ｜ 平台风险 0** |
+| **P8 自动发布** | `/publish` 或精修后自动 | 会话接管、批量新建/原位修改、状态核验回读 | `fanqie-auto-publisher`（`publish-to-fanqie.mjs` / `update-chapters.mjs` / `verify-chapters.mjs`） | 番茄后台章节生效 | **全量章节状态显示“已发布”** |
+| **P9 数据复盘**（可选） | `/review-data` | 用户提供作者后台数据（读完率、追读、加书架、评论） → 定位掉点章节 → 调整后续章纲 | [06-trend-radar.md](references/06-trend-radar.md) 第四节 | 复盘结论 + 章纲修订 | — |
 
-> 用户可以从任意阶段切入（例如直接拿已有大纲要求续写）。此时 P0 先补齐 `state.md` 的必填项，再进入对应阶段。
+> 用户可以从任意阶段切入（例如直接拿已有大纲要求续写）。此时 P0 先补齐 `state.md` 的必填项，再进入对应阶段。创作完成后自动链式调用 P7 精修与 P8 发布。
 
 ---
 
@@ -73,8 +73,9 @@ novels/<书名>/
 | `/bible` | 生成/更新设定账本（P4） |
 | `/open` | 写黄金三章（P5） |
 | `/write [章号]` | 写下一章或指定章（P6） |
-| `/lint <章节路径>` | 跑文本体检脚本 |
-| `/audit [章节范围]` | 主编级审计（P7） |
+| `/refine [章节范围]` | 调用 `fanqie-audit-refiner` 自动去AI味精修至 clean(0)（P7） |
+| `/publish` | 调用 `fanqie-auto-publisher` 自动发布至番茄后台并核验状态（P8） |
+| `/verify` | 核验番茄后台全量章节发布状态（P8） |
 | `/status` | 输出 state.md 摘要：进度、战力、未回收伏笔 |
 | `/to-growth` | 把当前项目交给 `fanqie-growth-orchestrator` 做"爽中有魂"加固 |
 

@@ -1,12 +1,13 @@
-﻿{
+{
   "name": "fanqie-novel-skills",
-  "version": "1.1.0",
-  "description": "Fanqie (Tomato) web-novel toolkit: hit-oriented orchestrator, growth/soul-driven orchestrator, and browser-automated publisher for book creation & chapter batch uploading.",
+  "version": "1.2.0",
+  "description": "Fanqie (Tomato) web-novel toolkit: hit-oriented orchestrator, growth/soul-driven orchestrator, multi-skill anti-AI audit refiner, and browser-automated publisher with status verification closed loop.",
   "author": "cnproduct",
   "repository": "https://github.com/cnproduct/fanqie-novel-skills",
   "skills": [
     "fanqie-hit-orchestrator",
     "fanqie-growth-orchestrator",
+    "fanqie-audit-refiner",
     "fanqie-auto-publisher"
   ]
 }

@@ -1,17 +1,20 @@
 ---
 name: fanqie-auto-publisher
-description: 自动化接管 ego lite 浏览器将小说作品与章节发布到番茄小说作家专区（支持全流程自动化：表单清洗、标签匹配、自适应模板封面生成、风控避坑检测、单章排版清洗与章节批量上传发布）。
+description: >-
+  番茄小说作家后台全流程自动化发书、批量上传、原位修订与审核状态核验技能。支持 ego lite / ego-browser
+  动态接管（无需重复登录/不泄露凭据）、书名与简介合规清洗、模板封面生成、风控避坑判定、批量章节排版发布、
+  已有章节原位修改更新（modifychapter）以及章节审核状态自动核验与拦截自愈闭环。
 ---
 
 # 番茄小说自动发布与章节上传技能（Fanqie Auto Publisher）
 
-本技能专门用于将已完成或连载中的小说作品及其章节，通过自动化接管运行中的 **ego lite** 浏览器，全自动发布至**番茄小说作家专区**（`https://fanqienovel.com/main/writer/home`）。
+本技能专门用于将已创作并经 `fanqie-audit-refiner` 精修达标的小说作品及其章节，通过自动化接管运行中的 **ego lite** / **ego-browser**，全自动发布至**番茄小说作家专区**（`https://fanqienovel.com/main/writer/home`），并持续核验审核状态直至全量章节全部变为“已发布”。
 
 ---
 
 ## 核心能力与适用场景
 
-1. **零配置浏览器接管**：通过 `ego-browser.exe` 动态接管作者已登录的 ego lite 浏览器会话，无须重新登录或暴露密码与 Cookie。
+1. **零配置浏览器接管**：通过 `ego-browser nodejs` 动态接管作者已登录的 ego lite 浏览器会话，无须重新登录或暴露密码与 Cookie。
 2. **字段规范与合规清洗**：
    - **书名自动截断/精炼**：严格适配番茄 15 汉字上限限制。
    - **爆款简介生成**：自动适配 50~500 字黄金钩子，剔除违禁词。
@@ -24,52 +27,37 @@ description: 自动化接管 ego lite 浏览器将小说作品与章节发布到
 5. **批量章节排版与发布**：
    - 自动剥离 Markdown 符号，清洗为符合番茄后台编辑器的纯文本分段。
    - 自动填入第 N 章与章节标题，批量存草稿或直接公开发布。
+6. **现有章节原位修订（In-place Modify）**：
+   - 支持对已发布的章节进行精准原位重新编辑提交（`/publish/<item_id>/?enter_from=modifychapter`），便于快速推送审校精修后的文本。
+7. **章节审核状态闭环核验（Status Verification）**：
+   - 自动化回读 `chapter-manage` 表格，提取全书章节状态，确认全部处于“已发布”；若有“审核不通过”自动告警并定位 Item ID 触发自愈修复。
 
 ---
 
-## 执行流程（P0 - P4）
+## 执行流程（P0 - P6）
 
 ```mermaid
 flowchart TD
-    P0["P0: 账号状态探测与会话接管<br/>(ego-browser TaskSpace)"] --> P1["P1: 作品元数据合规清洗<br/>(书名/简介/标签/主角)"]
+    P0["P0: 账号状态探测与会话接管<br/>(ego-browser TaskSpace)"] --> P1["P1: 作品元数据合规清洗<br/>(书名≤15字/简介/标签/主角)"]
     P1 --> P2["P2: 封面策略与生成<br/>(模板自适应合成 / 本地上传)"]
-    P2 --> P3["P3: 自动化建书与风控拦截判定<br/>(完本模式 vs 连载模式)"]
-    P3 --> P4["P4: 批量章节清洗与逐章上传<br/>(去MD格式/排版校验/发布)"]
+    P2 --> P3["P3: 自动化建书与风控判定<br/>(完本模式 vs 连载模式)"]
+    P3 --> P4["P4: 批量章节新建上传<br/>(publish/?enter_from=newchapter)"]
+    P4 --> P5["P5: 章节原位修订更新<br/>(publish/ITEM_ID/?enter_from=modifychapter)"]
+    P5 --> P6["P6: 章节审核状态核验与自愈<br/>(chapter-manage: 确保全量'已发布')"]
 ```
 
-### P0：会话接管与状态探测
-- 使用 Node.js 运行自动化脚本：
-  ```bash
-  & "C:\Program Files\Citro Labs\ego lite\Application\0.6.2.7\ego-browser.exe" nodejs -e "await import('file:///path/to/publish-to-fanqie.mjs')"
-  ```
-- 探测账号信息接口 `/api/author/account/info/v0/`：
-  - `can_create_serial_book`：连载模式可用性
-  - `is_auth`：实名认证状态
-  - `author_level_id`：作者等级
+### 自动化脚本调度
 
-### P1：元数据合规清洗
-- **书名**：必须 ≤ 15 字（中英文、数字及基础标点）。
-- **目标读者**：男频（1）/ 女频（0）。
-- **阅读标签**：
-  - 主分类：如 `年代`、`种田`、`现言脑洞`、`玄幻言情` 等。
-  - 情节/主题：如 `发家致富`、`重生`、`职场商战`。
-- **内容标签**：
-  - 世界观：`80年代`、`70年代`、`四合院` 等。
-  - 情感：`无CP`、`独宠`、`先婚后爱` 等。
-- **作品简介**：50~500 字，按“现状困境 + 金手指打破 + 极限反转/爽点展望”3段式排布。
+```bash
+# 1. 自动化建书与批量首发
+ego-browser nodejs -e "const { publishNovel } = await import('./scripts/publish-to-fanqie.mjs'); await publishNovel({ ... });"
 
-### P2：封面自适应生成
-- 切换至“模板封面”选项卡。
-- 选定匹配风格的底图模版，番茄后台前端 canvas 自动将书名居中排版并上传至 CDN。
+# 2. 批量章节原位更新（精修版重传）
+ego-browser nodejs -e "const { updateChapters } = await import('./scripts/update-chapters.mjs'); await updateChapters({ bookId: '...', chapters: [...] });"
 
-### P3：建书提交与异常处理
-- 点击“立即创建”。
-- 若提示 `创建完本模式作品数超出每日上限`：告知作者当日限额已满，等待次日 00:00 自动刷新后重试，或完成实名认证解锁连载多书权限。
-
-### P4：章节批量发布
-- 遍历 `05-fanqie-upload/` 下各章节文档。
-- 读取每章标题与正文。
-- 调用章节发布接口或页面自动化逐章提交。
+# 3. 章节发布与审核状态核验
+ego-browser nodejs -e "const { verifyChapterStatus } = await import('./scripts/verify-chapters.mjs'); await verifyChapterStatus({ bookId: '...' });"
+```
 
 ---
 
